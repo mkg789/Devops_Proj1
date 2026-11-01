@@ -1,0 +1,66 @@
+
+name: Build ElectronicsWeb Docker Images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docker/**'
+      - '.github/workflows/**'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Frontend and Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout DevOps repository
+      - name: Checkout DevOps Repository
+        uses: actions/checkout@v4
+
+      # Checkout application repository
+      - name: Checkout Application Repository
+        uses: actions/checkout@v4
+        with:
+          repository: mkg789/ElectronicsWeb
+          ref: main
+          path: ElectronicsWeb
+
+      # Copy Docker configuration into application build contexts
+      - name: Prepare Docker Build Contexts
+        run: |
+          cp docker/backend/.dockerignore ElectronicsWeb/server/.dockerignore
+          cp docker/frontend/.dockerignore ElectronicsWeb/client/.dockerignore
+          cp docker/frontend/nginx.conf ElectronicsWeb/client/nginx.conf
+
+      # Initialize Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build backend
+      - name: Build Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ElectronicsWeb/server
+          file: ./docker/backend/Dockerfile
+          tags: electronicsweb-backend:ci
+          push: false
+          load: true
+
+      # Build frontend
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ElectronicsWeb/client
+          file: ./docker/frontend/Dockerfile
+          build-args: |
+            VITE_API_URL=/api
+          tags: electronicsweb-frontend:ci
+          push: false
+          load: true
