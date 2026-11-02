@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: electronicsweb-frontend
+  namespace: electronicsweb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: electronicsweb-frontend
+  template:
+    metadata:
+      labels:
+        app: electronicsweb-frontend
+    spec:
+      imagePullSecrets:
+        - name: harbor-registry
+      containers:
+        - name: frontend
+          image: 192.168.49.1:80/electronicsweb/electronicsweb-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
