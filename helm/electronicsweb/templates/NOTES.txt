@@ -1,0 +1,9 @@
+ElectronicsWeb has been deployed!
+
+Namespace: {{ .Values.namespace }}
+
+Backend Service: {{ .Values.backend.service.name }}
+Backend Port: {{ .Values.backend.service.port }}
+
+Frontend Service: {{ .Values.frontend.service.name }}
+Frontend NodePort: {{ .Values.frontend.service.nodePort }}

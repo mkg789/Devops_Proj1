@@ -1,0 +1,34 @@
+namespace: electronicsweb
+
+imagePullSecrets:
+  - name: harbor-registry
+
+backend:
+  name: electronicsweb-backend
+  replicaCount: 1
+  image:
+    repository: 192.168.49.1:80/electronicsweb/electronicsweb-backend
+    tag: latest
+    pullPolicy: Always
+  containerPort: 5000
+  service:
+    name: electronicsweb-backend-service
+    type: ClusterIP
+    port: 5000
+  env:
+    port: "5000"
+  existingSecret: electronicsweb-backend-secrets
+
+frontend:
+  name: electronicsweb-frontend
+  replicaCount: 3
+  image:
+    repository: 192.168.49.1:80/electronicsweb/electronicsweb-frontend
+    tag: latest
+    pullPolicy: Always
+  containerPort: 80
+  service:
+    name: electronicsweb-frontend-service
+    type: NodePort
+    port: 80
+    nodePort: 30080

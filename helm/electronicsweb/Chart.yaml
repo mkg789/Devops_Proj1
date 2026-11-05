@@ -1,0 +1,6 @@
+apiVersion: v2
+name: electronicsweb
+description: Helm chart for ElectronicsWeb full-stack application
+type: application
+version: 0.1.0
+appVersion: "V02.00.04.00"
