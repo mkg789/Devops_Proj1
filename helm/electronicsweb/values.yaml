@@ -21,7 +21,7 @@ backend:
 
 frontend:
   name: electronicsweb-frontend
-  replicaCount: 2
+  replicaCount: 3
   image:
     repository: 192.168.49.1:80/electronicsweb/electronicsweb-frontend
     tag: latest
