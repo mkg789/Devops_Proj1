@@ -1,0 +1,22 @@
+
+name: Test WSL Self Hosted Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runner-test:
+    runs-on: self-hosted
+
+    steps:
+      - name: Check runner
+        run: |
+          echo "Hello from Murali's WSL runner"
+          hostname
+          whoami
+
+      - name: Check Docker
+        run: docker version
+
+      - name: Check Harbor
+        run: curl -I http://harbor.local
