@@ -8,7 +8,7 @@ backend:
   replicaCount: 1
   image:
     repository: 192.168.49.1:80/electronicsweb/electronicsweb-backend
-    tag: latest
+    tag: 54934cfc9eae317342a1412f7f8e9a992725b043
     pullPolicy: Always
   containerPort: 5000
   service:
@@ -24,7 +24,7 @@ frontend:
   replicaCount: 3
   image:
     repository: 192.168.49.1:80/electronicsweb/electronicsweb-frontend
-    tag: latest
+    tag: 54934cfc9eae317342a1412f7f8e9a992725b043
     pullPolicy: Always
   containerPort: 80
   service:
