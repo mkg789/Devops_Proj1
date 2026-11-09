@@ -168,8 +168,28 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "No Helm changes to commit"
-          else
-            git commit -m "Deploy ElectronicsWeb ${APP_SHA}"
-            git push origin HEAD:${GITHUB_REF_NAME}
+            exit 0
           fi
 
+          git commit -m "Deploy ElectronicsWeb ${APP_SHA}"
+
+          for attempt in 1 2 3; do
+            git fetch origin "$GITHUB_REF_NAME"
+
+            if ! git rebase "origin/$GITHUB_REF_NAME"; then
+              git rebase --abort
+              echo "Rebase conflict. Manual review required."
+              exit 1
+            fi
+
+            if git push origin HEAD:"$GITHUB_REF_NAME"; then
+              echo "Helm update pushed successfully"
+              exit 0
+            fi
+
+            echo "Push attempt $attempt failed; retrying..."
+            sleep 3
+          done
+
+          echo "Unable to push Helm update after 3 attempts"
+          exit 1
