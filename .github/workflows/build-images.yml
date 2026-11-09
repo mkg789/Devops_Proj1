@@ -1,5 +1,5 @@
 
-name: Build ElectronicsWeb Docker Images
+name: Build and Deploy ElectronicsWeb Images
 
 on:
   push:
@@ -12,20 +12,23 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
+
+  # JOB 1: Build images and push to GHCR
   build:
     name: Build Frontend and Backend
     runs-on: ubuntu-latest
 
+    outputs:
+      app_sha: ${{ steps.app.outputs.sha }}
+
     steps:
-      # Checkout DevOps repository
       - name: Checkout DevOps Repository
         uses: actions/checkout@v4
 
-      # Checkout application repository
       - name: Checkout Application Repository
         uses: actions/checkout@v4
         with:
@@ -33,38 +36,40 @@ jobs:
           ref: main
           path: ElectronicsWeb
 
-      # Copy Docker configuration into application build contexts
+      - name: Get Application Commit SHA
+        id: app
+        run: |
+          SHA=$(git -C ElectronicsWeb rev-parse HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Application version: $SHA"
+
       - name: Prepare Docker Build Contexts
         run: |
           cp docker/backend/.dockerignore ElectronicsWeb/server/.dockerignore
           cp docker/frontend/.dockerignore ElectronicsWeb/client/.dockerignore
           cp docker/frontend/nginx.conf ElectronicsWeb/client/nginx.conf
 
-      # Initialize Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Add GHCR login
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build backend
-      - name: Build and Push Backend Image
+      - name: Build and Push Backend
         uses: docker/build-push-action@v6
         with:
           context: ./ElectronicsWeb/server
           file: ./docker/backend/Dockerfile
           tags: |
             ghcr.io/mkg789/electronicsweb-backend:latest
-            ghcr.io/mkg789/electronicsweb-backend:${{ github.sha }}
+            ghcr.io/mkg789/electronicsweb-backend:${{ steps.app.outputs.sha }}
           push: true
 
-      # Build frontend
-      - name: Build and Push Frontend Image
+      - name: Build and Push Frontend
         uses: docker/build-push-action@v6
         with:
           context: ./ElectronicsWeb/client
@@ -73,5 +78,98 @@ jobs:
             VITE_API_URL=/api
           tags: |
             ghcr.io/mkg789/electronicsweb-frontend:latest
-            ghcr.io/mkg789/electronicsweb-frontend:${{ github.sha }}
+            ghcr.io/mkg789/electronicsweb-frontend:${{ steps.app.outputs.sha }}
           push: true
+
+  # JOB 2: Promote images from GHCR to Harbor
+  promote:
+    name: Promote Images to Harbor and Update Helm
+    runs-on: [self-hosted, linux, x64]
+    needs: build
+
+    env:
+      APP_SHA: ${{ needs.build.outputs.app_sha }}
+
+    steps:
+      - name: Checkout DevOps Repository
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.local:80
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Pull Images from GHCR
+        run: |
+          docker pull ghcr.io/mkg789/electronicsweb-backend:$APP_SHA
+          docker pull ghcr.io/mkg789/electronicsweb-frontend:$APP_SHA
+
+      - name: Tag Images for Harbor
+        run: |
+          docker tag ghcr.io/mkg789/electronicsweb-backend:$APP_SHA \
+            harbor.local:80/electronicsweb/electronicsweb-backend:$APP_SHA
+
+          docker tag ghcr.io/mkg789/electronicsweb-frontend:$APP_SHA \
+            harbor.local:80/electronicsweb/electronicsweb-frontend:$APP_SHA
+
+          docker tag ghcr.io/mkg789/electronicsweb-backend:$APP_SHA \
+            harbor.local:80/electronicsweb/electronicsweb-backend:latest
+
+          docker tag ghcr.io/mkg789/electronicsweb-frontend:$APP_SHA \
+            harbor.local:80/electronicsweb/electronicsweb-frontend:latest
+
+      - name: Push Images to Harbor
+        run: |
+          docker push harbor.local:80/electronicsweb/electronicsweb-backend:$APP_SHA
+          docker push harbor.local:80/electronicsweb/electronicsweb-frontend:$APP_SHA
+
+          docker push harbor.local:80/electronicsweb/electronicsweb-backend:latest
+          docker push harbor.local:80/electronicsweb/electronicsweb-frontend:latest
+
+      - name: Update Helm Image Tags
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path("helm/electronicsweb/values.yaml")
+          content = path.read_text()
+
+          old = "tag: latest"
+          count = content.count(old)
+
+          if count != 2:
+              raise SystemExit(
+                  f"Expected 2 image tags, found {count}. Aborting."
+              )
+
+          content = content.replace(
+              old, f"tag: {os.environ['APP_SHA']}"
+          )
+
+          path.write_text(content)
+          PY
+
+      - name: Commit and Push Helm Update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add helm/electronicsweb/values.yaml
+
+          if git diff --cached --quiet; then
+            echo "No Helm changes to commit"
+          else
+            git commit -m "Deploy ElectronicsWeb ${APP_SHA}"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
+
