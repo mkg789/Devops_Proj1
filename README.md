@@ -1530,6 +1530,7 @@ Additional improvements:
 - TLS certificates.
 - Persistent storage where required.
 - Multiple replicas and rolling updates.
+- Most of the above is is implemented by the time you are seeing this repo it would be completed
 
 ---
 
