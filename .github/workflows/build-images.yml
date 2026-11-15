@@ -139,24 +139,36 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
+          import re
           from pathlib import Path
 
           path = Path("helm/electronicsweb/values.yaml")
           content = path.read_text()
 
-          old = "tag: latest"
-          count = content.count(old)
+          new_tag = os.environ["APP_SHA"]
 
-          if count != 2:
-              raise SystemExit(
-                  f"Expected 2 image tags, found {count}. Aborting."
-              )
-
-          content = content.replace(
-              old, f"tag: {os.environ['APP_SHA']}"
+          content, backend_count = re.subn(
+              r"(backend:\s*\n(?:.*\n)*?\s+image:\s*\n\s+repository:.*\n\s+tag:)\s*\S+",
+              rf"\1 {new_tag}",
+              content,
+              count=1
           )
 
+          content, frontend_count = re.subn(
+              r"(frontend:\s*\n(?:.*\n)*?\s+image:\s*\n\s+repository:.*\n\s+tag:)\s*\S+",
+              rf"\1 {new_tag}",
+              content,
+              count=1
+          )
+
+          if backend_count != 1 or frontend_count != 1:
+              raise SystemExit(
+                  f"Expected one backend and frontend tag. "
+                  f"Found backend={backend_count}, frontend={frontend_count}"
+              )
+
           path.write_text(content)
+          print(f"Updated both Helm image tags to {new_tag}")
           PY
 
       - name: Commit and Push Helm Update
